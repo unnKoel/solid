@@ -1,4 +1,9 @@
 // Basic port modification of Reacts Scheduler: https://github.com/facebook/react/tree/master/packages/scheduler
+
+
+// The control of main thread is just able to be yield in the gap between tasks in this case.
+// For react, it can be yield in the runing of the task, because the task is a sepcial type that's
+// the diff process based on Fiber tree.
 export interface Task {
   id: number;
   fn: ((didTimeout: boolean) => void) | null;
@@ -26,16 +31,16 @@ let taskIdCounter = 1,
 const maxSigned31BitInt = 1073741823;
 /* istanbul ignore next */
 function setupScheduler() {
-  const channel = new MessageChannel(),
-    port = channel.port2;
-  scheduleCallback = () => port.postMessage(null);
+  const channel = new MessageChannel(), // MessageChannel, https://developer.mozilla.org/en-US/docs/Web/API/MessageChannel
+    port = channel.port2;  // using MessageChannel as a observer pattern
+  scheduleCallback = () => port.postMessage(null); // use to put a new macro task into JS event loop to yield control of browser main thread.
   channel.port1.onmessage = () => {
     if (scheduledCallback !== null) {
       const currentTime = performance.now();
-      deadline = currentTime + yieldInterval;
+      deadline = currentTime + yieldInterval; // the time of an frame
       const hasTimeRemaining = true;
       try {
-        const hasMoreWork = scheduledCallback(hasTimeRemaining, currentTime);
+        const hasMoreWork = scheduledCallback(hasTimeRemaining, currentTime); // scheduledCallback is try to run tasks
         if (!hasMoreWork) {
           scheduledCallback = null;
         } else port.postMessage(null);
@@ -48,13 +53,14 @@ function setupScheduler() {
     }
   };
 
+  // whether yield control of main thread, based on time of a frame, and isInputPending status
   if (
     navigator &&
     (navigator as NavigatorScheduling).scheduling &&
     (navigator as NavigatorScheduling).scheduling.isInputPending
   ) {
     const scheduling = (navigator as NavigatorScheduling).scheduling;
-    shouldYieldToHost = () => {
+    shouldYieldToHost = () => { 
       const currentTime = performance.now();
       if (currentTime >= deadline) {
         // There's no time left. We may want to yield control of the main
@@ -83,11 +89,13 @@ function setupScheduler() {
   }
 }
 
+// Put task into task Queue using binary search
 function enqueue(taskQueue: Task[], task: Task) {
   function findIndex() {
     let m = 0;
     let n = taskQueue.length - 1;
 
+    // binary search to find the right place
     while (m <= n) {
       const k = (n + m) >> 1;
       const cmp = task.expirationTime - taskQueue[k].expirationTime;
@@ -97,7 +105,7 @@ function enqueue(taskQueue: Task[], task: Task) {
     }
     return m;
   }
-  taskQueue.splice(findIndex(), 0, task);
+  taskQueue.splice(findIndex(), 0, task); // put task into task queue
 }
 
 export function requestCallback(fn: () => void, options?: { timeout: number }): Task {
