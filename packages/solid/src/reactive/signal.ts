@@ -23,6 +23,28 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+/**
+ * use `pure` property in computation as a marker to filter out computation into two different groups
+ * `Updates` and `Effect` that runs after `Updates` to ensure dom computation runs before non-dom computation.
+ */
+
+/**
+ * because of computation runs sequentially, not reversely, so using global varible to link outer computation
+ * is acceptable, unnecessary to apply stack data structure. `Listener` is actually that global variable I means
+ */
+
+/**
+ * OnCleanup api is able to put in the level of component, My thought before is holding that inference on the root
+ * elemement of component, and register it as the listener of a fire event.
+ * 
+ * Actually OnCleanup would be added into cleanups array of owner.
+ * 
+ * but the essential reason why owner is involved is to create a boundary of view like component.
+ * however owner is created based on pragmatic where that boundary really needs for framework level, component 
+ * is created based on clear semantics for user.
+ * 
+ */
+
 import { requestCallback, Task } from "./scheduler.js";
 import { setHydrateContext, sharedConfig } from "../render/hydration.js";
 import type { JSX } from "../jsx.js";
@@ -49,8 +71,8 @@ export let Transition: TransitionState | null = null;
 let Scheduler: ((fn: () => void) => any) | null = null;
 let ExternalSourceFactory: ExternalSourceFactory | null = null;
 let Listener: Computation<any> | null = null;
-let Updates: Computation<any>[] | null = null;
-let Effects: Computation<any>[] | null = null;
+let Updates: Computation<any>[] | null = null; // priority execution
+let Effects: Computation<any>[] | null = null; // run after Updates
 let ExecCount = 0;
 
 /** Object storing callbacks for debugging during development */
@@ -137,7 +159,7 @@ export type RootFunction<T> = (dispose: () => void) => T;
  */
 export function createRoot<T>(fn: RootFunction<T>, detachedOwner?: typeof Owner): T {
   const listener = Listener,
-    owner = Owner,
+    owner = Owner,  // set owner equal to pre-level owner to connect with next-level owner newly created.
     unowned = fn.length === 0,
     current = detachedOwner === undefined ? owner : detachedOwner,
     root: Owner = unowned
@@ -167,8 +189,8 @@ export function createRoot<T>(fn: RootFunction<T>, detachedOwner?: typeof Owner)
   try {
     return runUpdates(updateFn as () => T, true)!;
   } finally {
-    Listener = listener;
-    Owner = owner;
+    Listener = listener;  // recover to pre-level listener
+    Owner = owner;   // recover to pre-level owner
   }
 }
 
@@ -1254,7 +1276,7 @@ export function enableExternalSource(factory: ExternalSourceFactory) {
 export function readSignal(this: SignalState<any> | Memo<any>) {
   const runningTransition = Transition && Transition.running;
   if (
-    (this as Memo<any>).sources &&
+    (this as Memo<any>).sources &&  // this is a computation
     (runningTransition ? (this as Memo<any>).tState : (this as Memo<any>).state)
   ) {
     if ((runningTransition ? (this as Memo<any>).tState : (this as Memo<any>).state) === STALE)
@@ -1266,11 +1288,13 @@ export function readSignal(this: SignalState<any> | Memo<any>) {
       Updates = updates;
     }
   }
+  // the place where obervers are put in?, Listener is Computation
+  // connect computation with source.
   if (Listener) {
     const sSlot = this.observers ? this.observers.length : 0;
     if (!Listener.sources) {
       Listener.sources = [this];
-      Listener.sourceSlots = [sSlot];
+      Listener.sourceSlots = [sSlot];  // in order to find out computation subscribed on this source.
     } else {
       Listener.sources.push(this);
       Listener.sourceSlots!.push(sSlot);
@@ -1298,15 +1322,15 @@ export function writeSignal(node: SignalState<any> | Memo<any>, value: any, isCo
         node.tValue = value;
       }
       if (!TransitionRunning) node.value = value;
-    } else node.value = value;
-    if (node.observers && node.observers.length) {
-      runUpdates(() => {
+    } else node.value = value;   // set value to node
+    if (node.observers && node.observers.length) {  // run observers
+      runUpdates(() => {  // put observers into Effects or Updates based on pure, then run updates and Effects.
         for (let i = 0; i < node.observers!.length; i += 1) {
           const o = node.observers![i];
           const TransitionRunning = Transition && Transition.running;
           if (TransitionRunning && Transition!.disposed.has(o)) continue;
           if (TransitionRunning ? !o.tState : !o.state) {
-            if (o.pure) Updates!.push(o);
+            if (o.pure) Updates!.push(o);  // if pure, put it into Updates, otherwise end with Effects
             else Effects!.push(o);
             if ((o as Memo<any>).observers) markDownstream(o as Memo<any>);
           }
@@ -1352,7 +1376,7 @@ function runComputation(node: Computation<any>, value: any, time: number) {
   let nextValue;
   const owner = Owner,
     listener = Listener;
-  Listener = Owner = node;
+  Listener = Owner = node; // narrow Listen and Owner both to be current computation.
   try {
     nextValue = node.fn(value);
   } catch (err) {
@@ -1371,7 +1395,7 @@ function runComputation(node: Computation<any>, value: any, time: number) {
     node.updatedAt = time + 1;
     return handleError(err);
   } finally {
-    Listener = listener;
+    Listener = listener;  // recover to original listener and owner.
     Owner = owner;
   }
   if (!node.updatedAt || node.updatedAt <= time) {
@@ -1625,7 +1649,7 @@ function markDownstream(node: Memo<any>) {
 
 function cleanNode(node: Owner) {
   let i;
-  if ((node as Computation<any>).sources) {
+  if ((node as Computation<any>).sources) {  // if node is computation, unlink computation with source.
     while ((node as Computation<any>).sources!.length) {
       const source = (node as Computation<any>).sources!.pop()!,
         index = (node as Computation<any>).sourceSlots!.pop()!,
@@ -1649,12 +1673,12 @@ function cleanNode(node: Owner) {
       delete (node as Memo<any>).tOwned;
     }
     reset(node as Computation<any>, true);
-  } else if (node.owned) {
+  } else if (node.owned) {  // save all computations in order to clean links between computation and source.
     for (i = node.owned.length - 1; i >= 0; i--) cleanNode(node.owned[i]);
     node.owned = null;
   }
 
-  if (node.cleanups) {
+  if (node.cleanups) {  // clean up all cleanup registed by Oncleanup
     for (i = node.cleanups.length - 1; i >= 0; i--) node.cleanups[i]();
     node.cleanups = null;
   }
