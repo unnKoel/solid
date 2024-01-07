@@ -45,6 +45,12 @@ SOFTWARE.
  * 
  */
 
+/**
+ * Each computation is also an owner which would connect with parent owner on creation.
+ * Why running computation each time should clean current and child computations upfront?
+ * when child computation would be created?
+ */
+
 import { requestCallback, Task } from "./scheduler.js";
 import { setHydrateContext, sharedConfig } from "../render/hydration.js";
 import type { JSX } from "../jsx.js";
@@ -1376,7 +1382,7 @@ function runComputation(node: Computation<any>, value: any, time: number) {
   let nextValue;
   const owner = Owner,
     listener = Listener;
-  Listener = Owner = node; // narrow Listen and Owner both to be current computation.
+  Listener = Owner = node; // make Listener and Owner both reference to current computation.
   try {
     nextValue = node.fn(value);
   } catch (err) {
@@ -1409,6 +1415,7 @@ function runComputation(node: Computation<any>, value: any, time: number) {
   }
 }
 
+// computation created is also a new owner to link the parent owner, meanwhile parent owner puts it into owned array.
 function createComputation<Next, Init = unknown>(
   fn: EffectFunction<Init | Next, Next>,
   init: Init,
@@ -1522,6 +1529,7 @@ function runUpdates<T>(fn: () => T, init: boolean) {
   }
 }
 
+// runQueue -> runTop
 function completeUpdates(wait: boolean) {
   if (Updates) {
     if (Scheduler && Transition && Transition.running) scheduleQueue(Updates);
