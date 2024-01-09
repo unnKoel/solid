@@ -28,12 +28,29 @@ Reactive updates to render effects are identical to effects: they queue up in re
 ## createComputed
 Like createRenderEffect, createComputed calls its function for the first time immediately. But they differ in how updates are performed. While createComputed generally updates immediately, createRenderEffect updates queue to run (along with createEffects) after the current render phase.
 
-## useTransition, startTransition
-Used to batch async updates in a transaction deferring commit until all async processes are complete. This is tied into Suspense and only tracks resources read under Suspense boundaries.
-
 ## createContext, useContext
 Context provides a form of dependency injection in Solid. It is used to save from needing to pass data as props through intermediate components.
 
-## lazy
 
-## createResource
+
+
+## lazy, createResource
+lazy uses createResource internally to manage its dynamic imports
+
+## Suspense, SuspenseList
+
+[SuspenseList example](https://www.solidjs.com/tutorial/async_suspense_list?solved)
+
+## useTransition, startTransition
+Used to batch async updates in a transaction deferring commit until all async processes are complete. This is tied into Suspense and only tracks resources read under Suspense boundaries.
+[async transitions](https://www.solidjs.com/tutorial/async_transitions)
+
+Suspense allows us to show fallback content when data is loading. This is great for initial loading, but on subsequent navigation it is often worse UX to fallback to the skeleton state.
+
+We can avoid going back to the fallback state by leveraging useTransition. It provides a wrapper and a pending indicator. The wrapper puts all downstream updates in a transaction that doesn't commit until all async events complete.
+
+- it continues to show the current branch while rendering the next off-screen
+- Resource reads under existing boundaries add it to the transition
+- However, any new nested Suspense components will show "fallback" if they have not completed loading before coming into view.
+
+[example](https://www.solidjs.com/tutorial/async_transitions?solved)
