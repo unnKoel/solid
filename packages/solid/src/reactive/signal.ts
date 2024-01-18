@@ -1338,6 +1338,8 @@ export function writeSignal(node: SignalState<any> | Memo<any>, value: any, isCo
           if (TransitionRunning ? !o.tState : !o.state) {
             if (o.pure) Updates!.push(o);  // if pure, put it into Updates, otherwise end with Effects
             else Effects!.push(o);
+            // why signal subscribe to antoher signal? Perhaps aim to support immutable update
+            // make every property on object to be a subject.
             if ((o as Memo<any>).observers) markDownstream(o as Memo<any>);
           }
           if (!TransitionRunning) o.state = STALE;
@@ -1405,6 +1407,7 @@ function runComputation(node: Computation<any>, value: any, time: number) {
     Owner = owner;
   }
   if (!node.updatedAt || node.updatedAt <= time) {
+    // if it's a source (signal), to handle the case of taking a function as set's parameter.
     if (node.updatedAt != null && "observers" in node) {
       writeSignal(node as Memo<any>, nextValue, true);
     } else if (Transition && Transition.running && node.pure) {
@@ -1477,6 +1480,7 @@ function createComputation<Next, Init = unknown>(
   return c;
 }
 
+// look up for owners
 function runTop(node: Computation<any>) {
   const runningTransition = Transition && Transition.running;
   if ((runningTransition ? node.tState : node.state) === 0) return;
@@ -1500,6 +1504,7 @@ function runTop(node: Computation<any>) {
         if (Transition!.disposed.has(top)) return;
       }
     }
+    // if state is stale, then update, otherwise lookUpstream when it stays pending.
     if ((runningTransition ? node.tState : node.state) === STALE) {
       updateComputation(node);
     } else if ((runningTransition ? node.tState : node.state) === PENDING) {
@@ -1515,6 +1520,7 @@ function runUpdates<T>(fn: () => T, init: boolean) {
   if (Updates) return fn();
   let wait = false;
   if (!init) Updates = [];
+  // if effects has value, then its execution should delay till updates end.
   if (Effects) wait = true;
   else Effects = [];
   ExecCount++;
@@ -1625,6 +1631,7 @@ function runUserEffects(queue: Computation<any>[]) {
   for (i = 0; i < userLength; i++) runTop(queue[i]);
 }
 
+// look for sources recursely.
 function lookUpstream(node: Computation<any>, ignore?: Computation<any>) {
   const runningTransition = Transition && Transition.running;
   if (runningTransition) node.tState = 0;
