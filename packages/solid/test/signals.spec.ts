@@ -130,7 +130,7 @@ describe("Update signals", () => {
       expect(memo()).toBe("Hello John");
     });
   });
-  test("Create and trigger a Memo in an effect", () =>
+  test("*Create and trigger a Memo in an effect", () =>
     new Promise(done => {
       createRoot(() => {
         let temp: string;
@@ -287,7 +287,7 @@ describe("Effect grouping of signals", () => {
         });
       });
     }));
-  test("Test cross setting in a effect update", () =>
+  test("*Test cross setting in a effect update", () =>
     new Promise(done => {
       createRoot(() => {
         let count = 0;

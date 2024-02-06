@@ -51,6 +51,10 @@ SOFTWARE.
  * when child computation would be created?
  */
 
+/**
+ * createMemo will create a computation which is also a signal
+ */
+
 import { requestCallback, Task } from "./scheduler.js";
 import { setHydrateContext, sharedConfig } from "../render/hydration.js";
 import type { JSX } from "../jsx.js";
@@ -668,6 +672,16 @@ export function createResource<T, S, R>(
     }
     return v;
   }
+
+  /**
+   * set new value and request state, if error happens, then set error.
+   * 
+   * except that, decrement every suspense context as current async request is ended,
+   * so that once the number of pending request is zero under each suspense, then suspense
+   * shows children, otherwise the loading placeholder.
+   * @param v 
+   * @param err 
+   */
   function completeLoad(v: T | undefined, err: any) {
     runUpdates(() => {
       if (err === undefined) setValue(() => v);
@@ -678,6 +692,8 @@ export function createResource<T, S, R>(
     }, false);
   }
 
+  // return value, meanwhile collect related suspenses under which there is some places reading aync value
+  // then count the number of pending request
   function read() {
     const c = SuspenseContext && useContext(SuspenseContext),
       v = value(),
@@ -687,6 +703,7 @@ export function createResource<T, S, R>(
       createComputed(() => {
         track();
         if (pr) {
+          // put this promise into Transition for collection, and prevent promise increments
           if (c.resolved && Transition && loadedUnderTransition) Transition.promises.add(pr);
           else if (!contexts.has(c)) {
             c.increment!();
@@ -701,6 +718,7 @@ export function createResource<T, S, R>(
     if (refetching !== false && scheduled) return;
     scheduled = false;
     const lookup = dynamic ? dynamic() : (source as S);
+    // is loaded under transition
     loadedUnderTransition = Transition && Transition.running;
     if (lookup == null || lookup === false) {
       loadEnd(pr, untrack(value));
@@ -728,9 +746,11 @@ export function createResource<T, S, R>(
     }
     scheduled = true;
     queueMicrotask(() => (scheduled = false));
-    runUpdates(() => {
+    // runUpdates is used to collects all updates and run them. any singal change, they only put computation
+    // or memo into updates or effects, that depends on `runUpdates` function to execute all of them.
+    runUpdates(() => {  
       setState(resolved ? "refreshing" : "pending");
-      trigger();
+      trigger();  // every refreshing, should initial state like promise context increment. 
     }, false);
     return p.then(
       v => loadEnd(p, v, undefined, lookup),
@@ -1338,11 +1358,10 @@ export function writeSignal(node: SignalState<any> | Memo<any>, value: any, isCo
           if (TransitionRunning ? !o.tState : !o.state) {
             if (o.pure) Updates!.push(o);  // if pure, put it into Updates, otherwise end with Effects
             else Effects!.push(o);
-            // why signal subscribe to antoher signal? Perhaps aim to support immutable update
-            // make every property on object to be a subject.
+            // why signal subscribe to another signal? because it's a memo that's not only a computation but also a signal
             if ((o as Memo<any>).observers) markDownstream(o as Memo<any>);
           }
-          if (!TransitionRunning) o.state = STALE;
+          if (!TransitionRunning) o.state = STALE;  // set state as stale for update
           else o.tState = STALE;
         }
         if (Updates!.length > 10e5) {
@@ -1485,6 +1504,7 @@ function runTop(node: Computation<any>) {
   const runningTransition = Transition && Transition.running;
   if ((runningTransition ? node.tState : node.state) === 0) return;
   if ((runningTransition ? node.tState : node.state) === PENDING) return lookUpstream(node);
+  // ?
   if (node.suspense && untrack(node.suspense.inFallback!))
     return node!.suspense.effects!.push(node!);
   const ancestors = [node];
@@ -1653,7 +1673,7 @@ function markDownstream(node: Memo<any>) {
   for (let i = 0; i < node.observers!.length; i += 1) {
     const o = node.observers![i];
     if (runningTransition ? !o.tState : !o.state) {
-      if (runningTransition) o.tState = PENDING;
+      if (runningTransition) o.tState = PENDING;  // set derived computation as pending status.
       else o.state = PENDING;
       if (o.pure) Updates!.push(o);
       else Effects!.push(o);
