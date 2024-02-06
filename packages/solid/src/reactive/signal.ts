@@ -36,13 +36,13 @@ SOFTWARE.
 /**
  * OnCleanup api is able to put in the level of component, My thought before is holding that inference on the root
  * elemement of component, and register it as the listener of a fire event.
- * 
+ *
  * Actually OnCleanup would be added into cleanups array of owner.
- * 
+ *
  * but the essential reason why owner is involved is to create a boundary of view like component.
- * however owner is created based on pragmatic where that boundary really needs for framework level, component 
+ * however owner is created based on pragmatic where that boundary really needs for framework level, component
  * is created based on clear semantics for user.
- * 
+ *
  */
 
 /**
@@ -169,7 +169,7 @@ export type RootFunction<T> = (dispose: () => void) => T;
  */
 export function createRoot<T>(fn: RootFunction<T>, detachedOwner?: typeof Owner): T {
   const listener = Listener,
-    owner = Owner,  // set owner equal to pre-level owner to connect with next-level owner newly created.
+    owner = Owner, // set owner equal to pre-level owner to connect with next-level owner newly created.
     unowned = fn.length === 0,
     current = detachedOwner === undefined ? owner : detachedOwner,
     root: Owner = unowned
@@ -199,8 +199,8 @@ export function createRoot<T>(fn: RootFunction<T>, detachedOwner?: typeof Owner)
   try {
     return runUpdates(updateFn as () => T, true)!;
   } finally {
-    Listener = listener;  // recover to pre-level listener
-    Owner = owner;   // recover to pre-level owner
+    Listener = listener; // recover to pre-level listener
+    Owner = owner; // recover to pre-level owner
   }
 }
 
@@ -675,12 +675,12 @@ export function createResource<T, S, R>(
 
   /**
    * set new value and request state, if error happens, then set error.
-   * 
+   *
    * except that, decrement every suspense context as current async request is ended,
    * so that once the number of pending request is zero under each suspense, then suspense
    * shows children, otherwise the loading placeholder.
-   * @param v 
-   * @param err 
+   * @param v
+   * @param err
    */
   function completeLoad(v: T | undefined, err: any) {
     runUpdates(() => {
@@ -748,9 +748,9 @@ export function createResource<T, S, R>(
     queueMicrotask(() => (scheduled = false));
     // runUpdates is used to collects all updates and run them. any singal change, they only put computation
     // or memo into updates or effects, that depends on `runUpdates` function to execute all of them.
-    runUpdates(() => {  
+    runUpdates(() => {
       setState(resolved ? "refreshing" : "pending");
-      trigger();  // every refreshing, should initial state like promise context increment. 
+      trigger(); // every refreshing, should initial state like promise context increment.
     }, false);
     return p.then(
       v => loadEnd(p, v, undefined, lookup),
@@ -1302,7 +1302,7 @@ export function enableExternalSource(factory: ExternalSourceFactory) {
 export function readSignal(this: SignalState<any> | Memo<any>) {
   const runningTransition = Transition && Transition.running;
   if (
-    (this as Memo<any>).sources &&  // this is a computation
+    (this as Memo<any>).sources && // this is a computation
     (runningTransition ? (this as Memo<any>).tState : (this as Memo<any>).state)
   ) {
     if ((runningTransition ? (this as Memo<any>).tState : (this as Memo<any>).state) === STALE)
@@ -1320,7 +1320,7 @@ export function readSignal(this: SignalState<any> | Memo<any>) {
     const sSlot = this.observers ? this.observers.length : 0;
     if (!Listener.sources) {
       Listener.sources = [this];
-      Listener.sourceSlots = [sSlot];  // in order to find out computation subscribed on this source.
+      Listener.sourceSlots = [sSlot]; // in order to find out computation subscribed on this source.
     } else {
       Listener.sources.push(this);
       Listener.sourceSlots!.push(sSlot);
@@ -1348,20 +1348,23 @@ export function writeSignal(node: SignalState<any> | Memo<any>, value: any, isCo
         node.tValue = value;
       }
       if (!TransitionRunning) node.value = value;
-    } else node.value = value;   // set value to node
-    if (node.observers && node.observers.length) {  // run observers
-      runUpdates(() => {  // put observers into Effects or Updates based on pure, then run updates and Effects.
+    } else node.value = value; // set value to node
+    if (node.observers && node.observers.length) {
+      // run observers
+      runUpdates(() => {
+        // put observers into Effects or Updates based on pure, then run updates and Effects.
         for (let i = 0; i < node.observers!.length; i += 1) {
           const o = node.observers![i];
           const TransitionRunning = Transition && Transition.running;
           if (TransitionRunning && Transition!.disposed.has(o)) continue;
           if (TransitionRunning ? !o.tState : !o.state) {
-            if (o.pure) Updates!.push(o);  // if pure, put it into Updates, otherwise end with Effects
+            if (o.pure)
+              Updates!.push(o); // if pure, put it into Updates, otherwise end with Effects
             else Effects!.push(o);
             // why signal subscribe to another signal? because it's a memo that's not only a computation but also a signal
             if ((o as Memo<any>).observers) markDownstream(o as Memo<any>);
           }
-          if (!TransitionRunning) o.state = STALE;  // set state as stale for update
+          if (!TransitionRunning) o.state = STALE; // set state as stale for update
           else o.tState = STALE;
         }
         if (Updates!.length > 10e5) {
@@ -1422,7 +1425,7 @@ function runComputation(node: Computation<any>, value: any, time: number) {
     node.updatedAt = time + 1;
     return handleError(err);
   } finally {
-    Listener = listener;  // recover to original listener and owner.
+    Listener = listener; // recover to original listener and owner.
     Owner = owner;
   }
   if (!node.updatedAt || node.updatedAt <= time) {
@@ -1673,7 +1676,7 @@ function markDownstream(node: Memo<any>) {
   for (let i = 0; i < node.observers!.length; i += 1) {
     const o = node.observers![i];
     if (runningTransition ? !o.tState : !o.state) {
-      if (runningTransition) o.tState = PENDING;  // set derived computation as pending status.
+      if (runningTransition) o.tState = PENDING; // set derived computation as pending status.
       else o.state = PENDING;
       if (o.pure) Updates!.push(o);
       else Effects!.push(o);
@@ -1684,7 +1687,8 @@ function markDownstream(node: Memo<any>) {
 
 function cleanNode(node: Owner) {
   let i;
-  if ((node as Computation<any>).sources) {  // if node is computation, unlink computation with source.
+  if ((node as Computation<any>).sources) {
+    // if node is computation, unlink computation with source.
     while ((node as Computation<any>).sources!.length) {
       const source = (node as Computation<any>).sources!.pop()!,
         index = (node as Computation<any>).sourceSlots!.pop()!,
@@ -1708,12 +1712,14 @@ function cleanNode(node: Owner) {
       delete (node as Memo<any>).tOwned;
     }
     reset(node as Computation<any>, true);
-  } else if (node.owned) {  // save all computations in order to clean links between computation and source.
+  } else if (node.owned) {
+    // save all computations in order to clean links between computation and source.
     for (i = node.owned.length - 1; i >= 0; i--) cleanNode(node.owned[i]);
     node.owned = null;
   }
 
-  if (node.cleanups) {  // clean up all cleanup registed by Oncleanup
+  if (node.cleanups) {
+    // clean up all cleanup registed by Oncleanup
     for (i = node.cleanups.length - 1; i >= 0; i--) node.cleanups[i]();
     node.cleanups = null;
   }

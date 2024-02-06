@@ -1,6 +1,5 @@
 // Basic port modification of Reacts Scheduler: https://github.com/facebook/react/tree/master/packages/scheduler
 
-
 // The control of main thread is just able to be yield in the gap between tasks in this case.
 // For react, it can be yield in the runing of the task, because the task is a sepcial type that's
 // the diff process based on Fiber tree.
@@ -32,7 +31,7 @@ const maxSigned31BitInt = 1073741823;
 /* istanbul ignore next */
 function setupScheduler() {
   const channel = new MessageChannel(), // MessageChannel, https://developer.mozilla.org/en-US/docs/Web/API/MessageChannel
-    port = channel.port2;  // using MessageChannel as a observer pattern
+    port = channel.port2; // using MessageChannel as a observer pattern
   scheduleCallback = () => port.postMessage(null); // use to put a new macro task into JS event loop to yield control of browser main thread.
   channel.port1.onmessage = () => {
     if (scheduledCallback !== null) {
@@ -60,7 +59,7 @@ function setupScheduler() {
     (navigator as NavigatorScheduling).scheduling.isInputPending
   ) {
     const scheduling = (navigator as NavigatorScheduling).scheduling;
-    shouldYieldToHost = () => { 
+    shouldYieldToHost = () => {
       const currentTime = performance.now();
       if (currentTime >= deadline) {
         // There's no time left. We may want to yield control of the main
